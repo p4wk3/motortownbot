@@ -7,6 +7,7 @@ from discord import Interaction, ui
 from typing import List, Dict
 from dotenv import load_dotenv
 from urllib.parse import quote_plus  # Dodano brakujący import
+from urllib.parse import urlencode
 import aiohttp
 
 # Ładowanie zmiennych środowiskowych
@@ -258,7 +259,9 @@ class Playersmg(commands.Cog):
             return
 
         try:
-            data = await self.api_request('POST', '/chat', {'message': message})
+            query = urlencode({'message': message})
+            endpoint = f"/chat?{query}"
+            data = await self.api_request('POST', endpoint)
             if data.get('succeeded'):
                 await ctx.send(f":white_check_mark: Wysłano ogłoszenie: `{message}`")
                 await ctx.message.delete()
@@ -271,7 +274,10 @@ class Playersmg(commands.Cog):
     @commands.check_any(has_admin_or_moderator_role(), commands.is_owner())
     @commands.command(name='kick')
     async def kick_player(self, ctx, player_id: int):
-        data = await self.api_request('POST', '/player/kick', {'player_id': player_id})
+        query = urlencode({'unique_id': player_id})
+        endpoint = f"/player/kick?{query}"
+        data = await self.api_request('POST', endpoint)
+
         if data.get('succeeded'):
             await ctx.send(f"Gracz o ID {player_id} został wyrzucony")
             await ctx.message.delete()
@@ -281,7 +287,10 @@ class Playersmg(commands.Cog):
     @commands.check_any(has_admin_or_moderator_role(), commands.is_owner())
     @commands.command(name='ban')
     async def ban_player(self, ctx, player_id: int):
-        data = await self.api_request('POST', '/player/ban', {'player_id': player_id})
+        query = urlencode({'unique_id': player_id})
+        endpoint = f"/player/ban?{query}"
+        data = await self.api_request('POST', endpoint)
+
         if data.get('succeeded'):
             await ctx.send(f"Gracz o ID {player_id} został zbanowany")
             await ctx.message.delete()
@@ -291,7 +300,10 @@ class Playersmg(commands.Cog):
     @commands.check_any(has_admin_or_moderator_role(), commands.is_owner())
     @commands.command(name='unban')
     async def unban_player(self, ctx, player_id: int):
-        data = await self.api_request('POST', '/player/unban', {'player_id': player_id})
+        query = urlencode({'unique_id': player_id})
+        endpoint = f"/player/unban?{query}"
+        data = await self.api_request('POST', endpoint)
+
         if data.get('succeeded'):
             await ctx.send(f"Gracz o ID {player_id} został odbanowany")
             await ctx.message.delete()
