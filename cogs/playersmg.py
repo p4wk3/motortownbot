@@ -216,6 +216,17 @@ class Playersmg(commands.Cog):
             raise ValueError("ADMIN_ROLE nie został ustawiony w pliku .env")
         self.admin_role = int(admin_role)
 
+        MODERATOR_ROLE_ID = int(os.getenv("MODERATOR_ROLE"))
+        if MODERATOR_ROLE_ID is None:
+            raise ValueError("MODERATOR_ROLE nie został ustawiony w pliku .env")
+        self.moderator_role = MODERATOR_ROLE_ID
+
+    def has_admin_or_moderator_role():
+        async def predicate(ctx):
+            allowed_roles = [ctx.cog.admin_role, ctx.cog.moderator_role]
+            return any(role.id in allowed_roles for role in ctx.author.roles)
+        return commands.check(predicate)
+
     async def api_request(self, method, endpoint, payload=None):
         """
         Funkcja pomocnicza do komunikacji z API.
@@ -240,7 +251,7 @@ class Playersmg(commands.Cog):
                 raise ValueError("Metoda HTTP nieobsługiwana")
 
     @commands.command(name='chat')
-    @commands.check_any(commands.has_role('Admin'), commands.is_owner())
+    @commands.check_any(has_admin_or_moderator_role(), commands.is_owner())
     async def post_chat(self, ctx, *, message: str):
         if ctx.channel.id != self.private_channel:
             await ctx.send("❌ Tej komendy można używać tylko na kanale prywatnym!", delete_after=10)
@@ -256,7 +267,8 @@ class Playersmg(commands.Cog):
         except Exception as e:
             await ctx.send(f":rotating_light: Krytyczny błąd: {str(e)}")
             print(f"Błąd komendy chat: {str(e)}")
-
+    
+    @commands.check_any(has_admin_or_moderator_role(), commands.is_owner())
     @commands.command(name='kick')
     async def kick_player(self, ctx, player_id: int):
         data = await self.api_request('POST', '/player/kick', {'player_id': player_id})
@@ -266,6 +278,7 @@ class Playersmg(commands.Cog):
         else:
             await ctx.send(f"Błąd: {data.get('message')}")
 
+    @commands.check_any(has_admin_or_moderator_role(), commands.is_owner())
     @commands.command(name='ban')
     async def ban_player(self, ctx, player_id: int):
         data = await self.api_request('POST', '/player/ban', {'player_id': player_id})
@@ -275,6 +288,7 @@ class Playersmg(commands.Cog):
         else:
             await ctx.send(f"Błąd: {data.get('message')}")
 
+    @commands.check_any(has_admin_or_moderator_role(), commands.is_owner())
     @commands.command(name='unban')
     async def unban_player(self, ctx, player_id: int):
         data = await self.api_request('POST', '/player/unban', {'player_id': player_id})
@@ -284,6 +298,7 @@ class Playersmg(commands.Cog):
         else:
             await ctx.send(f"Błąd: {data.get('message')}")
 
+    @commands.check_any(has_admin_or_moderator_role(), commands.is_owner())
     @commands.command(name='banlist')
     async def banlist(self, ctx):
         try:
@@ -305,6 +320,7 @@ class Playersmg(commands.Cog):
 
         await ctx.send(embed=embed)
 
+    @commands.check_any(has_admin_or_moderator_role(), commands.is_owner())
     @commands.command(name='playersmg')
     async def players_management(self, ctx):
         # Sprawdzamy, czy komenda została wywołana na kanale prywatnym

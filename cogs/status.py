@@ -72,7 +72,7 @@ class Status(commands.Cog):
                         description=status_msg,
                         color=discord.Color.green() if current_status else discord.Color.red()
                     )
-                    embed.set_footer(text=f"Status: {datetime.datetime.now().strftime('%H:%M:%S')}")
+                    embed.set_footer(text=f"{datetime.datetime.now().strftime('%H:%M:%S')}")
                     await channel.send(embed=embed)
                     self.last_status = current_status
 
@@ -148,7 +148,7 @@ class Status(commands.Cog):
                 ctx,
                 success=False,
                 title="🔴 Serwer OFFLINE",
-                description="```diff\n- Serwer jest aktualnie niedostępny\n- Spróbuj ponownie później\n```",
+                description="```diff\n- Serwer jest aktualnie niedostępny```",
                 fields=[
                     ("🌐 Adres", f"```{self.server_ip}```", True),
                     ("📡 Status", "```🔴 Brak połączenia```", True)
