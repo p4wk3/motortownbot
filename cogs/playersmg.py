@@ -202,8 +202,8 @@ class Playersmg(commands.Cog):
         
         # Konfiguracja z pliku .env
         self.server_ip = os.getenv("SERVER_IP")
-        self.web_port = int(os.getenv("WEB_PORT", 8080))
-        self.game_slots = int(os.getenv("GAME_SLOTS", 50))
+        self.web_port = int(os.getenv("WEB_PORT"))
+        self.game_slots = int(os.getenv("GAME_SLOTS"))
         self.password = quote_plus(os.getenv("WEB_API_PASSWORD"))
         self.base_url = f"http://{self.server_ip}:{self.web_port}"
         self.timeout = aiohttp.ClientTimeout(total=10)
@@ -222,12 +222,6 @@ class Playersmg(commands.Cog):
         if MODERATOR_ROLE_ID is None:
             raise ValueError("MODERATOR_ROLE nie został ustawiony w pliku .env")
         self.moderator_role = MODERATOR_ROLE_ID
-
-    def has_admin_or_moderator_role():
-        async def predicate(ctx):
-            allowed_roles = [ctx.cog.admin_role, ctx.cog.moderator_role]
-            return any(role.id in allowed_roles for role in ctx.author.roles)
-        return commands.check(predicate)
 
     async def api_request(self, method, endpoint, payload=None):
         """
@@ -253,7 +247,6 @@ class Playersmg(commands.Cog):
                 raise ValueError("Metoda HTTP nieobsługiwana")
 
     @commands.command(name='chat')
-    @commands.check_any(has_admin_or_moderator_role(), commands.is_owner())
     async def post_chat(self, ctx, *, message: str):
         author = ctx.author.display_name
 
@@ -266,7 +259,7 @@ class Playersmg(commands.Cog):
             endpoint = f"/chat?message={msg}"
             data = await self.api_request('POST', endpoint)
             if data.get('succeeded'):
-                await ctx.send(f"{author}:white_check_mark: Wysłano ogłoszenie: `{message}`")
+                await ctx.send(f"`{author}` :white_check_mark: \n```{message}```")
                 await ctx.message.delete()
             else:
                 await ctx.send(f":warning: Błąd API: {data.get('message', 'Nieznany błąd')}")
@@ -274,7 +267,6 @@ class Playersmg(commands.Cog):
             await ctx.send(f":rotating_light: Krytyczny błąd: {str(e)}")
             print(f"Błąd komendy chat: {str(e)}")
     
-    @commands.check_any(has_admin_or_moderator_role(), commands.is_owner())
     @commands.command(name='kick')
     async def kick_player(self, ctx, player_id: int):
         query = urlencode({'unique_id': player_id})
@@ -287,7 +279,6 @@ class Playersmg(commands.Cog):
         else:
             await ctx.send(f"Błąd: {data.get('message')}")
 
-    @commands.check_any(has_admin_or_moderator_role(), commands.is_owner())
     @commands.command(name='ban')
     async def ban_player(self, ctx, player_id: int):
         query = urlencode({'unique_id': player_id})
@@ -300,7 +291,6 @@ class Playersmg(commands.Cog):
         else:
             await ctx.send(f"Błąd: {data.get('message')}")
 
-    @commands.check_any(has_admin_or_moderator_role(), commands.is_owner())
     @commands.command(name='unban')
     async def unban_player(self, ctx, player_id: int):
         query = urlencode({'unique_id': player_id})
@@ -313,7 +303,6 @@ class Playersmg(commands.Cog):
         else:
             await ctx.send(f"Błąd: {data.get('message')}")
 
-    @commands.check_any(has_admin_or_moderator_role(), commands.is_owner())
     @commands.command(name='banlist')
     async def banlist(self, ctx):
         try:
@@ -335,7 +324,6 @@ class Playersmg(commands.Cog):
 
         await ctx.send(embed=embed)
 
-    @commands.check_any(has_admin_or_moderator_role(), commands.is_owner())
     @commands.command(name='playersmg')
     async def players_management(self, ctx):
         # Sprawdzamy, czy komenda została wywołana na kanale prywatnym
