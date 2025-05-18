@@ -7,6 +7,7 @@ from discord import Interaction, ui
 from typing import List, Dict
 from dotenv import load_dotenv
 from urllib.parse import quote_plus  # Dodano brakujący import
+from urllib.parse import quote
 from urllib.parse import urlencode
 import aiohttp
 
@@ -254,16 +255,18 @@ class Playersmg(commands.Cog):
     @commands.command(name='chat')
     @commands.check_any(has_admin_or_moderator_role(), commands.is_owner())
     async def post_chat(self, ctx, *, message: str):
+        author = ctx.author.display_name
+
         if ctx.channel.id != self.private_channel:
             await ctx.send("❌ Tej komendy można używać tylko na kanale prywatnym!", delete_after=10)
             return
 
         try:
-            query = urlencode({'message': message})
-            endpoint = f"/chat?{query}"
+            msg = quote(message)
+            endpoint = f"/chat?message={msg}"
             data = await self.api_request('POST', endpoint)
             if data.get('succeeded'):
-                await ctx.send(f":white_check_mark: Wysłano ogłoszenie: `{message}`")
+                await ctx.send(f"{author}:white_check_mark: Wysłano ogłoszenie: `{message}`")
                 await ctx.message.delete()
             else:
                 await ctx.send(f":warning: Błąd API: {data.get('message', 'Nieznany błąd')}")
