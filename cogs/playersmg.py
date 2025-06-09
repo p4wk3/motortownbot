@@ -97,30 +97,47 @@ class PlayersMGMenu(View):
 
 class PlayerSelect(Select):
     def __init__(self, players: List[Dict]):
-        options = [
-            discord.SelectOption(
-                label=player['name'],
-                description=f"ID: {player['unique_id']}",
-                value=str(idx)
-            ) for idx, player in enumerate(players)
-        ]
-        # Jeśli lista graczy jest pusta, dodajemy opcję informacyjną i wyłączamy select
+        options = []
+        
+        # POPRAWKA: Sprawdź czy players nie jest None i czy ma elementy
+        if players and isinstance(players, list):
+            options = [
+                discord.SelectOption(
+                    label=player.get('name', 'Nieznany gracz'),  # Bezpieczne pobieranie nazwy
+                    description=f"ID: {player.get('unique_id', 'N/A')}",
+                    value=str(idx)
+                ) for idx, player in enumerate(players)
+                if isinstance(player, dict)  # Sprawdź czy element to słownik
+            ]
+        
+        # Jeśli brak opcji, dodaj info
         if not options:
-            options.append(discord.SelectOption(label="Brak graczy", description="Brak dostępnych graczy", value="none"))
+            options.append(discord.SelectOption(
+                label="Brak graczy", 
+                description="Brak dostępnych graczy", 
+                value="none"
+            ))
+        
         super().__init__(placeholder="Wybierz gracza...", options=options)
-        if not players:
+        
+        # Wyłącz select jeśli brak prawdziwych graczy
+        if not players or options[0].value == "none":
             self.disabled = True
 
     async def callback(self, interaction: Interaction):
-        if self.disabled:
+        if self.disabled or self.values[0] == "none":
             await interaction.response.send_message("Brak graczy do wybrania.", ephemeral=True)
             return
 
         view: PlayersMGMenu = self.view
-        view.selected_player = view.players[int(self.values[0])]
-        view.current_page = "player_actions"
-        view.update_components()
-        await view.update_message(interaction)
+        try:
+            player_index = int(self.values[0])
+            view.selected_player = view.players[player_index]
+            view.current_page = "player_actions"
+            view.update_components()
+            await view.update_message(interaction)
+        except (ValueError, IndexError) as e:
+            await interaction.response.send_message("❌ Błąd wyboru gracza.", ephemeral=True)
 
 class BannedPlayersSelect(Select):
     def __init__(self, banned_players: List[Dict]):
@@ -324,52 +341,66 @@ class Playersmg(commands.Cog):
 
         await ctx.send(embed=embed)
 
-    @commands.command(name='playersmg')
-    async def players_management(self, ctx):
-        # Sprawdzamy, czy komenda została wywołana na kanale prywatnym
-        if ctx.channel.id != self.private_channel:
-            await ctx.send("❌ Tej komendy można używać tylko na kanale prywatnym!", delete_after=10)
-            return
+@commands.command(name='playersmg')
+async def players_management(self, ctx):
+    """Interaktywne menu zarządzania graczami"""
+    
+    # Sprawdź uprawnienia
+    if ctx.channel.id != self.bot.private_channel:
+        await ctx.send("❌ Tej komendy można używać tylko na kanale prywatnym!", delete_after=10)
+        return
+    
+    if not self.bot.has_role(ctx.author, self.bot.admin_role):
+        await ctx.send("❌ Nie masz uprawnień do użycia tej komendy!", delete_after=10)
+        return
+
+    try:
+        # Pobierz dane z API
+        players_response = await self.bot.api_request('GET', '/player/list')
+        banned_response = await self.bot.api_request('GET', '/player/banlist')
         
-        # Sprawdzamy, czy użytkownik posiada rolę administratora na podstawie ID roli
-        if self.admin_role not in [role.id for role in ctx.author.roles]:
-            await ctx.send("❌ Nie masz uprawnień do użycia tej komendy!", delete_after=10)
+        # POPRAWKA: Prawidłowe przetwarzanie danych
+        players_data = []
+        banned_data = []
+        
+        # Przetwórz dane graczy
+        if players_response.get('succeeded'):
+            players_raw = players_response.get('data', {})
+            if isinstance(players_raw, dict):
+                players_data = list(players_raw.values())
+            elif isinstance(players_raw, list):
+                players_data = players_raw
+        
+        # Przetwórz dane zbanowanych
+        if banned_response.get('succeeded'):
+            banned_raw = banned_response.get('data', {})
+            if isinstance(banned_raw, dict):
+                banned_data = list(banned_raw.values())
+            elif isinstance(banned_raw, list):
+                banned_data = banned_raw
+
+        # Debug - pokaż co otrzymaliśmy
+        print(f"Players data: {players_data}")
+        print(f"Banned data: {banned_data}")
+
+        # POPRAWKA: Sprawdź czy API w ogóle odpowiada
+        if not players_response.get('succeeded'):
+            await ctx.send(f"❌ Błąd pobierania listy graczy: {players_response.get('message')}")
             return
 
-        try:
-            # Pobierz aktualną listę graczy oraz zbanowanych graczy
-            players_response = await self.api_request('GET', '/player/list')
-            banned_response = await self.api_request('GET', '/player/banlist')
-            
-            # Debug - wypisanie surowej odpowiedzi z API
-            print("Response from /player/list:", players_response)
-            
-            players_data_raw = players_response.get('data', {})
-            if isinstance(players_data_raw, dict):
-                players_data = list(players_data_raw.values())
-            else:
-                players_data = players_data_raw
-            
-            banned_data_raw = banned_response.get('data', {})
-            if isinstance(banned_data_raw, dict):
-                banned_data = list(banned_data_raw.values())
-            else:
-                banned_data = banned_data_raw
-
-            if not players_data:
-                await ctx.send("Brak dostępnych graczy.")
-                return
-
-            view = PlayersMGMenu(
-                cog=self,
-                players_data=players_data,
-                banned_players=banned_data
-            )
-            embed = view.create_embed()
-            await ctx.send(embed=embed, view=view)
-            
-        except Exception as e:
-            await ctx.send(f"⚠️ Błąd inicjalizacji menu: {str(e)}")
+        # Stwórz menu (nawet jeśli lista jest pusta - menu pokaże "brak graczy")
+        view = PlayersMGMenu(
+            cog=self,
+            players_data=players_data,  # Teraz na pewno jest lista (może pusta)
+            banned_players=banned_data  # Teraz na pewno jest lista (może pusta)
+        )
+        
+        embed = view.create_embed()
+        await ctx.send(embed=embed, view=view)
+        
+    except Exception as e:
+        print(f"Błąd w players_management: {str(e)}")
+        await ctx.send(f"⚠️ Błąd inicjalizacji menu: {str(e)}")
 
 async def setup(bot):
     await bot.add_cog(Playersmg(bot))
