@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold">Konfiguracja Bota</h6>
+                </div>
+                <div class="card-body">
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ category }}">{{ message }}</div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+                    
+                    <form method="POST" action="{{ url_for('routes.config') }}">
+                        {{ form.csrf_token }}
+                        
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <div class="alert alert-info">
+                                    <i class="fas fa-info-circle"></i> 
+                                    Wprowadź wartości dla zmiennych konfiguracyjnych. Puste pola zachowają swoje poprzednie wartości.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Discord Configuration -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <h5 class="border-bottom pb-2">
+                                    <i class="fab fa-discord"></i> Konfiguracja Discord
+                                </h5>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="discord-token">{{ form.DISCORD_TOKEN.label }}</label>
+                                    <div class="input-group">
+                                        <input id="discord-token" name="DISCORD_TOKEN" type="password" class="form-control" value="{{ config.get('DISCORD_TOKEN', '') }}" readonly>
+                                        <div class="input-group-append">
+                                            <button class="btn btn-outline-secondary px-3" type="button" id="toggle-token-visibility" title="Pokaż/Ukryj token">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <small class="form-text text-muted">Kliknij ikonę oka, aby wyświetlić i edytować token.</small>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>{{ form.DISCORD_CHANNEL_ID.label }}</label>
+                                    <input type="text" name="DISCORD_CHANNEL_ID" class="form-control" value="{{ config.get('DISCORD_CHANNEL_ID', '') }}">
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>{{ form.DISCORD_PRIVATE_CHANNEL_ID.label }}</label>
+                                    <input type="text" name="DISCORD_PRIVATE_CHANNEL_ID" class="form-control" value="{{ config.get('DISCORD_PRIVATE_CHANNEL_ID', '') }}">
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>{{ form.DISCORD_LOG_CHANNEL_ID.label }}</label>
+                                    <input type="text" name="DISCORD_LOG_CHANNEL_ID" class="form-control" value="{{ config.get('DISCORD_LOG_CHANNEL_ID', '') }}">
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>{{ form.DISCORD_ADMIN_ROLE_ID.label }}</label>
+                                    <input type="text" name="DISCORD_ADMIN_ROLE_ID" class="form-control" value="{{ config.get('DISCORD_ADMIN_ROLE_ID', '') }}">
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>{{ form.DISCORD_MOD_ROLE_ID.label }}</label>
+                                    <input type="text" name="DISCORD_MOD_ROLE_ID" class="form-control" value="{{ config.get('DISCORD_MOD_ROLE_ID', '') }}">
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>{{ form.DISCORD_STATUS_CHANNEL_ID.label }}</label>
+                                    <input type="text" name="DISCORD_STATUS_CHANNEL_ID" class="form-control" value="{{ config.get('DISCORD_STATUS_CHANNEL_ID', '') }}">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Game Server Configuration -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <h5 class="border-bottom pb-2">
+                                    <i class="fas fa-gamepad"></i> Konfiguracja Serwera Gry
+                                </h5>
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label>{{ form.GAME_SERVER_HOST.label }}</label>
+                                    <input type="text" name="GAME_SERVER_HOST" class="form-control" value="{{ config.get('GAME_SERVER_HOST', '') }}">
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label>{{ form.GAME_SERVER_PORT.label }}</label>
+                                    <input type="text" name="GAME_SERVER_PORT" class="form-control" value="{{ config.get('GAME_SERVER_PORT', '') }}">
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label>{{ form.GAME_SERVER_RCON_PASSWORD.label }}</label>
+                                    <input type="password" name="GAME_SERVER_RCON_PASSWORD" class="form-control" value="{{ config.get('GAME_SERVER_RCON_PASSWORD', '') }}">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Debug Configuration -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <h5 class="border-bottom pb-2">
+                                    <i class="fas fa-bug"></i> Konfiguracja Debugowania
+                                </h5>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>{{ form.LOG_LEVEL.label }}</label>
+                                    {{ form.LOG_LEVEL(class="form-control", value=config.get('LOG_LEVEL', '')) }}
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>{{ form.DEBUG.label }}</label>
+                                    {{ form.DEBUG(class="form-control", value=config.get('DEBUG', '')) }}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-12">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save"></i> Zapisz Konfigurację
+                                </button>
+                                <button type="reset" class="btn btn-secondary">
+                                    <i class="fas fa-undo"></i> Resetuj
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const toggleButton = document.getElementById('toggle-token-visibility');
+    const tokenInput = document.getElementById('discord-token');
+    const icon = toggleButton.querySelector('i');
+    let isEditable = false;
+
+    toggleButton.addEventListener('click', function() {
+        isEditable = !isEditable;
+        
+        if (isEditable) {
+            // Enable editing and show value
+            tokenInput.readOnly = false;
+            tokenInput.type = 'text';
+            icon.classList.remove('fa-eye');
+            icon.classList.add('fa-eye-slash');
+        } else {
+            // Disable editing and hide value
+            tokenInput.readOnly = true;
+            tokenInput.type = 'password';
+            icon.classList.remove('fa-eye-slash');
+            icon.classList.add('fa-eye');
+        }
+    });
+});
+</script>
+{% endblock %} 

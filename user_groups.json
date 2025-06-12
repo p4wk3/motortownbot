@@ -1,0 +1,15 @@
+{
+    "admin": {
+        "name": "Administrator",
+        "permissions": [
+            "*"
+        ]
+    },
+    "69": {
+        "name": "Moderator",
+        "permissions": [
+            "dashboard",
+            "players"
+        ]
+    }
+}

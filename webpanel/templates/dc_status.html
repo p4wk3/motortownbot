@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold">Discord Status</h6>
+                    <div>
+                        <button id="toggleAutoUpdate" class="btn btn-primary">
+                            <i class="fas fa-sync-alt me-2"></i>
+                            <span id="toggleText">Wyłącz Auto-Update</span>
+                        </button>
+                        <button id="refreshStatus" class="btn btn-success ms-2">
+                            <i class="fas fa-redo-alt me-2"></i>
+                            Odśwież Teraz
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card bg-dark">
+                                <div class="card-header">
+                                    <h6 class="m-0">Podgląd Embeda</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="discord-embed">
+                                        <div class="embed-title">{{ embed.title }}</div>
+                                        <div class="embed-description">{{ embed.description | safe }}</div>
+                                        <div class="embed-footer text-muted small">
+                                            {{ embed.footer }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="m-0">Informacje</h6>
+                                </div>
+                                <div class="card-body">
+                                    <p><strong>Ostatnia aktualizacja:</strong> {{ last_update }}</p>
+                                    <p><strong>Status Auto-Update:</strong> <span id="autoUpdateStatus" class="badge bg-success">Włączony</span></p>
+                                    <div class="alert alert-info">
+                                        <i class="fas fa-info-circle"></i>
+                                        Możesz włączyć/wyłączyć automatyczne aktualizacje statusu za pomocą przycisku powyżej.
+                                        Status jest domyślnie aktualizowany co minutę.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.discord-embed {
+    background-color: #2f3136;
+    border-left: 4px solid #5865f2;
+    padding: 1rem;
+    border-radius: 4px;
+}
+
+.embed-title {
+    color: #ffffff;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+}
+
+.embed-description {
+    color: #dcddde;
+    white-space: pre-wrap;
+}
+
+.embed-footer {
+    margin-top: 0.5rem;
+    color: #72767d;
+    font-size: 0.8rem;
+}
+</style>
+
+<script>
+let autoUpdateEnabled = true;
+
+document.getElementById('toggleAutoUpdate').addEventListener('click', async function() {
+    try {
+        const response = await fetch('/api/dc_status/toggle', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+            }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            autoUpdateEnabled = data.enabled;
+            updateUI();
+            
+            // Pokaż powiadomienie
+            const alert = document.createElement('div');
+            alert.className = `alert alert-success alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3`;
+            alert.style.zIndex = '1050';
+            alert.innerHTML = `
+                ${data.message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.body.appendChild(alert);
+            
+            // Usuń alert po 3 sekundach
+            setTimeout(() => {
+                alert.remove();
+            }, 3000);
+        }
+    } catch (error) {
+        console.error('Błąd:', error);
+    }
+});
+
+document.getElementById('refreshStatus').addEventListener('click', async function() {
+    try {
+        const response = await fetch('/api/dc_status/refresh', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+            }
+        });
+        
+        if (response.ok) {
+            location.reload();
+        }
+    } catch (error) {
+        console.error('Błąd:', error);
+    }
+});
+
+function updateUI() {
+    const toggleButton = document.getElementById('toggleAutoUpdate');
+    const toggleText = document.getElementById('toggleText');
+    const statusBadge = document.getElementById('autoUpdateStatus');
+    
+    if (autoUpdateEnabled) {
+        toggleText.textContent = 'Wyłącz Auto-Update';
+        toggleButton.classList.remove('btn-success');
+        toggleButton.classList.add('btn-primary');
+        statusBadge.textContent = 'Włączony';
+        statusBadge.className = 'badge bg-success';
+    } else {
+        toggleText.textContent = 'Włącz Auto-Update';
+        toggleButton.classList.remove('btn-primary');
+        toggleButton.classList.add('btn-success');
+        statusBadge.textContent = 'Wyłączony';
+        statusBadge.className = 'badge bg-danger';
+    }
+}
+</script>
+{% endblock %} 

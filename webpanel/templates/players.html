@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">
+                        <i class="fas fa-users mr-2"></i>
+                        Lista Graczy
+                    </h3>
+                    <div class="card-tools d-flex align-items-center gap-2">
+                        <div class="input-group input-group-sm" style="width: 250px;">
+                            <input type="text" id="playerSearch" class="form-control float-right" placeholder="Szukaj gracza...">
+                            <div class="input-group-append">
+                                <button type="submit" class="btn btn-default">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <button id="refreshPlayers" class="btn btn-primary btn-sm ms-2" title="Odśwież listę graczy">
+                            <i class="fas fa-sync-alt"></i> Odśwież
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-4">
+                        <div class="col-lg-3 col-6 text-center">
+                            <div>
+                                <i class="fas fa-users fa-lg mb-1"></i>
+                                <div class="fw-bold">{{ stats.total_players }}</div>
+                                <div class="text-muted">Łącznie Graczy</div>
+                            </div>
+                        </div>
+                        <div class="col-lg-3 col-6 text-center">
+                            <div>
+                                <i class="fas fa-plug fa-lg mb-1"></i>
+                                <div class="fw-bold">{{ stats.players_online }}</div>
+                                <div class="text-muted">Graczy Online</div>
+                            </div>
+                        </div>
+                        <div class="col-lg-3 col-6 text-center">
+                            <div>
+                                <i class="fas fa-sign-in-alt fa-lg mb-1"></i>
+                                <div class="fw-bold">{{ stats.total_joins }}</div>
+                                <div class="text-muted">Łącznie Dołączeń</div>
+                            </div>
+                        </div>
+                        <div class="col-lg-3 col-6 text-center">
+                            <div>
+                                <i class="fas fa-clock fa-lg mb-1"></i>
+                                <div class="fw-bold">{{ stats.formatted_total_time }}</div>
+                                <div class="text-muted">Łączny Czas Gry</div>
+                            </div>
+                        </div>
+                    </div>
+                    <table class="table table-bordered table-hover" id="playersTable">
+                        <thead>
+                            <tr>
+                                <th>Status</th>
+                                <th>Nick</th>
+                                <th>ID</th>
+                                <th>Dołączeń</th>
+                                <th>Czas Gry</th>
+                                <th>Pierwszy Raz</th>
+                                <th>Ostatnio Widziany</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for player in players %}
+                            <tr>
+                                {% if player.is_banned %}
+                                <td><span class="badge badge-danger">BANNED</span></td>
+                                {% elif player.is_online %}
+                                <td><span class="badge badge-success">Online</span></td>
+                                {% else %}
+                                <td><span class="badge badge-secondary">Offline</span></td>
+                                {% endif %}
+                                <td>{{ player.name }}</td>
+                                <td><code>{{ player.unique_id }}</code></td>
+                                <td>{{ player.join_count }}</td>
+                                <td>{{ player.formatted_time }}</td>
+                                <td>{{ player.first_seen|format_datetime }}</td>
+                                <td>{{ player.last_seen|format_datetime }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- DataTables (CDN) -->
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap4.min.css">
+<link rel="stylesheet" href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap4.min.css">
+<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap4.min.js"></script>
+<script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
+
+<style>
+.sort-icon i {
+    font-size: 1.2em;
+    color: #fff !important;
+    vertical-align: middle;
+    margin-left: 4px;
+}
+</style>
+
+<script>
+$(document).ready(function() {
+    var table = $('#playersTable').DataTable({
+        "responsive": true,
+        "autoWidth": false,
+        "order": [[0, 'asc'], [1, 'asc']],
+        "language": {
+            "url": "//cdn.datatables.net/plug-ins/1.10.21/i18n/Polish.json"
+        }
+    });
+
+    // Wyszukiwarka
+    $('#playerSearch').on('keyup', function() {
+        table.search(this.value).draw();
+    });
+
+    // Obsługa przycisku Odśwież
+    $('#refreshPlayers').on('click', function() {
+        var btn = $(this);
+        btn.prop('disabled', true).html('<i class="fas fa-sync fa-spin"></i> Odświeżanie...');
+        $.ajax({
+            url: '/players/refresh',
+            method: 'POST',
+            headers: { 'X-CSRFToken': $('meta[name="csrf-token"]').attr('content') },
+            success: function(data) {
+                location.reload();
+            },
+            error: function(xhr) {
+                if(xhr.status === 403) {
+                    alert('Brak uprawnień do odświeżania listy graczy.');
+                } else {
+                    alert('Błąd podczas odświeżania: ' + (xhr.responseJSON?.error || xhr.statusText));
+                }
+                btn.prop('disabled', false).html('<i class="fas fa-sync-alt"></i> Odśwież');
+            }
+        });
+    });
+});
+</script>
+{% endblock %} 

@@ -1,24 +1,23 @@
-import os
 import discord
 import asyncio
 from discord.ext import commands
 from discord.ui import View, Button, Select
 from discord import Interaction, ui
-from typing import List, Dict
-from dotenv import load_dotenv
+from typing import List, Dict, Optional, Union, TYPE_CHECKING
 from urllib.parse import quote
 from urllib.parse import urlencode
+import logging
 
-# Ładowanie zmiennych środowiskowych
-load_dotenv()
+if TYPE_CHECKING:
+    from .playersmg import Playersmg
 
 class PlayersMGMenu(View):
-    def __init__(self, cog, players_data: List[Dict], banned_players: List[Dict] = None):
-        super().__init__(timeout=30)
+    def __init__(self, cog, players_data: List[Dict], banned_players: Optional[List[Dict]] = None):
+        super().__init__(timeout=180)
         self.cog = cog
-        self.players = players_data
+        self.players = players_data or []
         self.banned_players = banned_players or []
-        self.selected_player = None
+        self.selected_player: Optional[Dict] = None
         self.current_page = "main"
         
         # Dodaj początkowe komponenty
@@ -32,8 +31,9 @@ class PlayersMGMenu(View):
             self.add_item(BannedButton())
             self.add_item(CancelButton())
         elif self.current_page == "player_actions":
-            self.add_item(ActionButton("Ban", discord.ButtonStyle.danger))
-            self.add_item(ActionButton("Kick", discord.ButtonStyle.secondary))
+            if self.selected_player:  # Dodaj przyciski tylko jeśli gracz jest wybrany
+                self.add_item(ActionButton("Ban", self.cog))
+                self.add_item(ActionButton("Kick", self.cog))
             self.add_item(BackButton())
         elif self.current_page == "banned":
             self.add_item(BannedPlayersSelect(self.banned_players))
@@ -61,8 +61,8 @@ class PlayersMGMenu(View):
         if self.players:
             for player in self.players:
                 embed.add_field(
-                    name=f"👤 {player['name']}",
-                    value=f"ID: `{player['unique_id']}`",
+                    name=f"👤 {player.get('name', 'Nieznany')}",
+                    value=f"ID: `{player.get('unique_id', 'N/A')}`",
                     inline=False
                 )
         else:
@@ -70,11 +70,18 @@ class PlayersMGMenu(View):
         return embed
 
     def create_player_embed(self):
+        if not self.selected_player:
+            return discord.Embed(
+                title="⚠️ Błąd",
+                description="Nie wybrano gracza",
+                color=discord.Color.red()
+            )
+            
         embed = discord.Embed(
-            title=f"⚙️ Zarządzanie: {self.selected_player['name']}",
+            title=f"⚙️ Zarządzanie: {self.selected_player.get('name', 'Nieznany')}",
             color=discord.Color.orange()
         )
-        embed.add_field(name="ID Gracza", value=f"`{self.selected_player['unique_id']}`")
+        embed.add_field(name="ID Gracza", value=f"`{self.selected_player.get('unique_id', 'N/A')}`")
         return embed
 
     def create_banned_embed(self):
@@ -85,8 +92,8 @@ class PlayersMGMenu(View):
         if self.banned_players:
             for player in self.banned_players:
                 embed.add_field(
-                    name=f"⛔ {player['name']}",
-                    value=f"ID: `{player['unique_id']}`",
+                    name=f"⛔ {player.get('name', 'Nieznany')}",
+                    value=f"ID: `{player.get('unique_id', 'N/A')}`",
                     inline=False
                 )
         else:
@@ -169,9 +176,15 @@ class BannedPlayersSelect(Select):
         view: PlayersMGMenu = self.view
         try:
             player_index = int(self.values[0])
-            selected_player = view.banned_players[player_index]
-            # Tutaj możesz dodać opcje unban itp.
-            await interaction.response.send_message(f"Wybrano: {selected_player['name']}", ephemeral=True)
+            view.selected_player = view.banned_players[player_index]
+            
+            # Dodaj przycisk unban
+            view.clear_items()
+            view.add_item(ActionButton("Unban", view.cog))
+            view.add_item(BackButton())
+            
+            await view.update_message(interaction)
+            
         except (ValueError, IndexError):
             await interaction.response.send_message("❌ Błąd wyboru gracza.", ephemeral=True)
 
@@ -186,35 +199,115 @@ class BannedButton(Button):
         await view.update_message(interaction)
 
 class ActionButton(Button):
-    def __init__(self, action: str, style: discord.ButtonStyle):
-        super().__init__(label=action, style=style)
+    def __init__(self, action: str, cog: 'Playersmg', **kwargs):
+        style = discord.ButtonStyle.danger if action.lower() == 'ban' else discord.ButtonStyle.secondary
+        super().__init__(label=action, style=style, **kwargs)
         self.action = action.lower()
-
-    async def callback(self, interaction: Interaction):
-        view: PlayersMGMenu = self.view
-        player_id = view.selected_player['unique_id']
+        self.cog = cog
         
-        try:
-            # Używamy API z głównego bota zamiast duplikować kod
-            if self.action == "ban":
-                data = await view.cog.bot.api_request('POST', '/player/ban', {'unique_id': player_id})
-            elif self.action == "kick":
-                data = await view.cog.bot.api_request('POST', '/player/kick', {'unique_id': player_id})
+    async def callback(self, interaction: Interaction):
+        """Obsługa kliknięcia przycisku"""
+        view: PlayersMGMenu = self.view
+        if not view.selected_player:
+            await interaction.response.send_message("❌ Nie wybrano gracza.", ephemeral=True)
+            return
             
-            if data.get('succeeded'):
-                confirmation = f"✅ Pomyślnie {self.action}owano gracza {view.selected_player['name']}!"
-                await interaction.response.send_message(confirmation, ephemeral=True)
-                
-                # Odśwież dane po akcji
-                view.current_page = "main"
-                view.update_components()
-                await asyncio.sleep(1)
-                await view.update_message(interaction)
+        try:
+            player_id = view.selected_player.get('unique_id')
+            player_name = view.selected_player.get('name', 'Nieznany')
+            
+            if not player_id:
+                await interaction.response.send_message("❌ Błąd: Brak ID gracza.", ephemeral=True)
+                return
+            
+            # Wykonaj akcję
+            if self.action == 'kick':
+                data = await self.cog.bot.api_request('POST', '/player/kick', {'unique_id': player_id})
+            elif self.action == 'ban':
+                data = await self.cog.bot.api_request('POST', '/player/ban', {'unique_id': player_id})
+            elif self.action == 'unban':
+                data = await self.cog.bot.api_request('POST', '/player/unban', {'unique_id': player_id})
             else:
-                await interaction.response.send_message(f"❌ Błąd: {data.get('message', 'Unknown error')}", ephemeral=True)
+                raise ValueError(f"Nieznana akcja: {self.action}")
+                
+            # Przygotuj wiadomość o wyniku
+            if data.get('succeeded'):
+                success_msg = f"✅ Pomyślnie wykonano akcję {self.action} na graczu {player_name} (ID: {player_id})"
+                try:
+                    await interaction.response.send_message(success_msg, ephemeral=True)
+                except discord.errors.InteractionResponded:
+                    await interaction.followup.send(success_msg, ephemeral=True)
+                
+                # Loguj akcję
+                await self.cog.bot.log_admin_action(
+                    interaction,
+                    self.action.title(),
+                    f"Gracz: {player_name} (ID: {player_id})",
+                    success=True
+                )
+                
+                # Odśwież listę graczy po akcji
+                if self.action in ['kick', 'ban']:
+                    players_data = await self.cog.bot.api_request('GET', '/player/list')
+                    if players_data.get('succeeded'):
+                        players_raw = players_data.get('data', {})
+                        if isinstance(players_raw, dict):
+                            view.players = list(players_raw.values())
+                        elif isinstance(players_raw, list):
+                            view.players = players_raw
+                            
+                # Odśwież listę zbanowanych po akcji
+                if self.action in ['ban', 'unban']:
+                    banned_data = await self.cog.bot.api_request('GET', '/player/banlist')
+                    if banned_data.get('succeeded'):
+                        view.banned_players = banned_data.get('data', [])
+                
+                # Wróć do głównego menu
+                view.current_page = "main"
+                view.selected_player = None
+                view.update_components()
+                await view.update_message(interaction)
+                
+            else:
+                error_msg = f"❌ Błąd: {data.get('message', 'Unknown error')}"
+                try:
+                    await interaction.response.send_message(error_msg, ephemeral=True)
+                except discord.errors.InteractionResponded:
+                    await interaction.followup.send(error_msg, ephemeral=True)
+                
+                # Loguj błąd
+                await self.cog.bot.log_admin_action(
+                    interaction,
+                    self.action.title(),
+                    f"Gracz: {player_name} (ID: {player_id})",
+                    reason=data.get('message', 'Unknown error'),
+                    success=False
+                )
                 
         except Exception as e:
-            await interaction.response.send_message(f"⚠️ Błąd systemowy: {str(e)}", ephemeral=True)
+            error_msg = f"⚠️ Błąd systemowy: {str(e)}"
+            try:
+                await interaction.response.send_message(error_msg, ephemeral=True)
+            except discord.errors.InteractionResponded:
+                await interaction.followup.send(error_msg, ephemeral=True)
+            
+            # Loguj błąd
+            await self.cog.bot.log_admin_action(
+                interaction,
+                self.action.title(),
+                f"Gracz: {player_name} (ID: {player_id})",
+                reason=str(e),
+                success=False
+            )
+            
+        # Aktualizuj widok
+        if isinstance(self.view, PlayersMGMenu):
+            try:
+                await self.view.update_message(interaction)
+            except Exception as e:
+                logging.error(f"Błąd aktualizacji widoku: {str(e)}")
+        else:
+            logging.error("Nie można zaktualizować widoku - nieprawidłowy typ widoku")
 
 class BackButton(Button):
     def __init__(self):
@@ -231,7 +324,29 @@ class CancelButton(Button):
         super().__init__(label="Anuluj", style=discord.ButtonStyle.danger)
 
     async def callback(self, interaction: Interaction):
-        await interaction.message.delete()
+        try:
+            if interaction.message:
+                await interaction.message.delete()
+            else:
+                await interaction.response.send_message(
+                    "❌ Nie można znaleźć wiadomości do usunięcia.",
+                    ephemeral=True
+                )
+        except discord.errors.NotFound:
+            # Wiadomość już została usunięta
+            pass
+        except discord.errors.Forbidden:
+            # Bot nie ma uprawnień do usunięcia wiadomości
+            await interaction.response.send_message(
+                "❌ Nie mam uprawnień do usunięcia tej wiadomości.",
+                ephemeral=True
+            )
+        except Exception as e:
+            # Inny błąd
+            await interaction.response.send_message(
+                f"❌ Nie można usunąć wiadomości: {str(e)}",
+                ephemeral=True
+            )
 
 class Playersmg(commands.Cog):
     def __init__(self, bot):
@@ -242,6 +357,7 @@ class Playersmg(commands.Cog):
 
     @commands.command(name='chat')
     async def post_chat(self, ctx, *, message: str):
+        """Wysyła wiadomość na czat w grze"""
         author = ctx.author.display_name
 
         if ctx.channel.id != self.bot.private_channel:
@@ -249,148 +365,245 @@ class Playersmg(commands.Cog):
             return
 
         try:
-            msg = quote(message)
-            endpoint = f"/chat?message={msg}"
-            data = await self.bot.api_request('POST', endpoint)
+            data = await self.bot.api_request(
+                'POST',
+                '/chat/send',
+                {'message': f"[Discord] {author}: {message}"}
+            )
             
             if data.get('succeeded'):
-                await ctx.send(f"`{author}` :white_check_mark: \n```{message}```")
-                await ctx.message.delete()
+                await ctx.message.add_reaction('✅')
+                # Loguj wysłanie wiadomości
+                await self.bot.log_admin_action(
+                    ctx,
+                    "Chat",
+                    f"Wysłano wiadomość: {message}",
+                    success=True
+                )
             else:
-                await ctx.send(f":warning: Błąd API: {data.get('message', 'Nieznany błąd')}")
+                await ctx.message.add_reaction('❌')
+                await ctx.send(f"Błąd: {data.get('message', 'Unknown error')}", delete_after=10)
+                # Loguj błąd
+                await self.bot.log_admin_action(
+                    ctx,
+                    "Chat",
+                    f"Błąd wysyłania wiadomości: {message}",
+                    reason=data.get('message', 'Unknown error'),
+                    success=False
+                )
+                
         except Exception as e:
-            await ctx.send(f":rotating_light: Krytyczny błąd: {str(e)}")
-            print(f"Błąd komendy chat: {str(e)}")
+            await ctx.message.add_reaction('❌')
+            await ctx.send(f"Błąd: {str(e)}", delete_after=10)
+            # Loguj błąd
+            await self.bot.log_admin_action(
+                ctx,
+                "Chat",
+                f"Błąd wysyłania wiadomości: {message}",
+                reason=str(e),
+                success=False
+            )
     
     @commands.command(name='kick')
     async def kick_player(self, ctx, player_id: int):
-        # Sprawdź uprawnienia
-        if not self.bot.has_role(ctx.author, self.bot.admin_role):
-            await ctx.send("❌ Nie masz uprawnień do użycia tej komendy!", delete_after=10)
+        """Wyrzuca gracza z serwera"""
+        if not self.bot.has_role(ctx.author, self.bot.moderator_role) and not self.bot.has_role(ctx.author, self.bot.admin_role):
+            await ctx.send("❌ Nie masz uprawnień do tej komendy!", delete_after=10)
             return
             
-        data = await self.bot.api_request('POST', '/player/kick', {'unique_id': player_id})
-
-        if data.get('succeeded'):
-            await ctx.send(f"✅ Gracz o ID {player_id} został wyrzucony")
-            await ctx.message.delete()
-        else:
-            await ctx.send(f"❌ Błąd: {data.get('message')}")
+        try:
+            data = await self.bot.api_request('POST', '/player/kick', {'unique_id': player_id})
+            
+            if data.get('succeeded'):
+                await ctx.send(f"✅ Pomyślnie wyrzucono gracza o ID: {player_id}")
+                # Loguj akcję
+                await self.bot.log_admin_action(
+                    ctx,
+                    "Kick",
+                    f"Gracz ID: {player_id}",
+                    success=True
+                )
+            else:
+                await ctx.send(f"❌ Błąd: {data.get('message', 'Unknown error')}")
+                # Loguj błąd
+                await self.bot.log_admin_action(
+                    ctx,
+                    "Kick",
+                    f"Gracz ID: {player_id}",
+                    reason=data.get('message', 'Unknown error'),
+                    success=False
+                )
+                
+        except Exception as e:
+            await ctx.send(f"⚠️ Błąd: {str(e)}")
+            # Loguj błąd
+            await self.bot.log_admin_action(
+                ctx,
+                "Kick",
+                f"Gracz ID: {player_id}",
+                reason=str(e),
+                success=False
+            )
 
     @commands.command(name='ban')
     async def ban_player(self, ctx, player_id: int):
-        # Sprawdź uprawnienia
-        if not self.bot.has_role(ctx.author, self.bot.admin_role):
-            await ctx.send("❌ Nie masz uprawnień do użycia tej komendy!", delete_after=10)
+        """Banuje gracza na serwerze"""
+        if not self.bot.has_role(ctx.author, self.bot.moderator_role) and not self.bot.has_role(ctx.author, self.bot.admin_role):
+            await ctx.send("❌ Nie masz uprawnień do tej komendy!", delete_after=10)
             return
             
-        data = await self.bot.api_request('POST', '/player/ban', {'unique_id': player_id})
-
-        if data.get('succeeded'):
-            await ctx.send(f"✅ Gracz o ID {player_id} został zbanowany")
-            await ctx.message.delete()
-        else:
-            await ctx.send(f"❌ Błąd: {data.get('message')}")
+        try:
+            data = await self.bot.api_request('POST', '/player/ban', {'unique_id': player_id})
+            
+            if data.get('succeeded'):
+                await ctx.send(f"✅ Pomyślnie zbanowano gracza o ID: {player_id}")
+                # Loguj akcję
+                await self.bot.log_admin_action(
+                    ctx,
+                    "Ban",
+                    f"Gracz ID: {player_id}",
+                    success=True
+                )
+            else:
+                await ctx.send(f"❌ Błąd: {data.get('message', 'Unknown error')}")
+                # Loguj błąd
+                await self.bot.log_admin_action(
+                    ctx,
+                    "Ban",
+                    f"Gracz ID: {player_id}",
+                    reason=data.get('message', 'Unknown error'),
+                    success=False
+                )
+                
+        except Exception as e:
+            await ctx.send(f"⚠️ Błąd: {str(e)}")
+            # Loguj błąd
+            await self.bot.log_admin_action(
+                ctx,
+                "Ban",
+                f"Gracz ID: {player_id}",
+                reason=str(e),
+                success=False
+            )
 
     @commands.command(name='unban')
     async def unban_player(self, ctx, player_id: int):
-        # Sprawdź uprawnienia
-        if not self.bot.has_role(ctx.author, self.bot.admin_role):
-            await ctx.send("❌ Nie masz uprawnień do użycia tej komendy!", delete_after=10)
+        """Odbanowuje gracza na serwerze"""
+        if not self.bot.has_role(ctx.author, self.bot.moderator_role) and not self.bot.has_role(ctx.author, self.bot.admin_role):
+            await ctx.send("❌ Nie masz uprawnień do tej komendy!", delete_after=10)
             return
             
-        data = await self.bot.api_request('POST', '/player/unban', {'unique_id': player_id})
-
-        if data.get('succeeded'):
-            await ctx.send(f"✅ Gracz o ID {player_id} został odbanowany")
-            await ctx.message.delete()
-        else:
-            await ctx.send(f"❌ Błąd: {data.get('message')}")
+        try:
+            data = await self.bot.api_request('POST', '/player/unban', {'unique_id': player_id})
+            
+            if data.get('succeeded'):
+                await ctx.send(f"✅ Pomyślnie odbanowano gracza o ID: {player_id}")
+                # Loguj akcję
+                await self.bot.log_admin_action(
+                    ctx,
+                    "Unban",
+                    f"Gracz ID: {player_id}",
+                    success=True
+                )
+            else:
+                await ctx.send(f"❌ Błąd: {data.get('message', 'Unknown error')}")
+                # Loguj błąd
+                await self.bot.log_admin_action(
+                    ctx,
+                    "Unban",
+                    f"Gracz ID: {player_id}",
+                    reason=data.get('message', 'Unknown error'),
+                    success=False
+                )
+                
+        except Exception as e:
+            await ctx.send(f"⚠️ Błąd: {str(e)}")
+            # Loguj błąd
+            await self.bot.log_admin_action(
+                ctx,
+                "Unban",
+                f"Gracz ID: {player_id}",
+                reason=str(e),
+                success=False
+            )
 
     @commands.command(name='banlist')
     async def banlist(self, ctx):
+        """Wyświetla listę zbanowanych graczy"""
+        if not self.bot.has_role(ctx.author, self.bot.moderator_role) and not self.bot.has_role(ctx.author, self.bot.admin_role):
+            await ctx.send("❌ Nie masz uprawnień do tej komendy!", delete_after=10)
+            return
+            
         try:
             data = await self.bot.api_request('GET', '/player/banlist')
             
             if not data.get('succeeded'):
-                await ctx.send(f"❌ Błąd podczas pobierania banlisty: {data.get('message')}")
+                await ctx.send(f"❌ Błąd: {data.get('message', 'Unknown error')}")
                 return
                 
-            banlist_data = data.get("data", {})
-            if not banlist_data:
-                await ctx.send("📋 Brak zbanowanych graczy.")
+            banned_players = data.get('data', [])
+            
+            if not banned_players:
+                embed = self.bot.create_embed(
+                    ctx,
+                    title="📋 Lista Zbanowanych Graczy",
+                    description="```diff\n- Brak zbanowanych graczy\n```"
+                )
+                await ctx.send(embed=embed)
                 return
-
-            embed = discord.Embed(
-                title="📋 Lista zbanowanych graczy", 
-                color=discord.Color.red()
+                
+            # Utwórz embed z listą zbanowanych graczy
+            embed = self.bot.create_embed(
+                ctx,
+                title="📋 Lista Zbanowanych Graczy",
+                description=f"Liczba zbanowanych graczy: {len(banned_players)}"
             )
             
-            for key, player in banlist_data.items():
-                name = player.get("name", "Brak nazwy")
-                unique_id = player.get("unique_id", "Brak ID")
-                embed.add_field(name=name, value=f"ID: {unique_id}", inline=False)
-
+            for player in banned_players:
+                embed.add_field(
+                    name=f"🚫 {player.get('name', 'Nieznany')}",
+                    value=f"ID: `{player.get('unique_id', 'N/A')}`",
+                    inline=False
+                )
+                
             await ctx.send(embed=embed)
             
         except Exception as e:
-            await ctx.send(f":rotating_light: Błąd podczas pobierania banlisty: {str(e)}")
+            await ctx.send(f"⚠️ Błąd: {str(e)}")
 
     @commands.command(name='playersmg')
     async def players_management(self, ctx):
-        """Interaktywne menu zarządzania graczami"""
-        
-        # Sprawdź uprawnienia
-        if ctx.channel.id != self.bot.private_channel:
-            await ctx.send("❌ Tej komendy można używać tylko na kanale prywatnym!", delete_after=10)
+        """Panel zarządzania graczami"""
+        if not self.bot.has_role(ctx.author, self.bot.moderator_role) and not self.bot.has_role(ctx.author, self.bot.admin_role):
+            await ctx.send("❌ Nie masz uprawnień do tej komendy!", delete_after=10)
             return
-        
-        if not self.bot.has_role(ctx.author, self.bot.admin_role):
-            await ctx.send("❌ Nie masz uprawnień do użycia tej komendy!", delete_after=10)
-            return
-
+            
         try:
-            # Pobierz dane z API używając głównego bota
-            players_response = await self.bot.api_request('GET', '/player/list')
-            banned_response = await self.bot.api_request('GET', '/player/banlist')
+            # Pobierz listę graczy
+            players_data = await self.bot.api_request('GET', '/player/list')
+            banned_data = await self.bot.api_request('GET', '/player/banlist')
             
-            # Przetwórz dane graczy
-            players_data = []
-            banned_data = []
-            
-            if players_response.get('succeeded'):
-                players_raw = players_response.get('data', {})
-                if isinstance(players_raw, dict):
-                    players_data = list(players_raw.values())
-                elif isinstance(players_raw, list):
-                    players_data = players_raw
-            
-            # Przetwórz dane zbanowanych
-            if banned_response.get('succeeded'):
-                banned_raw = banned_response.get('data', {})
-                if isinstance(banned_raw, dict):
-                    banned_data = list(banned_raw.values())
-                elif isinstance(banned_raw, list):
-                    banned_data = banned_raw
-
-            # Sprawdź czy API w ogóle odpowiada
-            if not players_response.get('succeeded'):
-                await ctx.send(f"❌ Błąd pobierania listy graczy: {players_response.get('message')}")
+            if not players_data.get('succeeded'):
+                await ctx.send(f"❌ Błąd pobierania listy graczy: {players_data.get('message', 'Unknown error')}")
                 return
-
-            # Stwórz menu
-            view = PlayersMGMenu(
-                cog=self,
-                players_data=players_data,
-                banned_players=banned_data
-            )
+                
+            players = []
+            players_raw = players_data.get('data', {})
             
+            if isinstance(players_raw, dict):
+                players = list(players_raw.values())
+            elif isinstance(players_raw, list):
+                players = players_raw
+                
+            banned_players = banned_data.get('data', []) if banned_data.get('succeeded') else []
+            
+            view = PlayersMGMenu(self, players, banned_players)
             embed = view.create_embed()
+            
             await ctx.send(embed=embed, view=view)
             
         except Exception as e:
-            print(f"Błąd w players_management: {str(e)}")
-            await ctx.send(f"⚠️ Błąd inicjalizacji menu: {str(e)}")
+            await ctx.send(f"⚠️ Błąd: {str(e)}")
 
 async def setup(bot):
     await bot.add_cog(Playersmg(bot))

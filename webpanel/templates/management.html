@@ -1,0 +1,457 @@
+{% extends "base.html" %}
+
+{% block head %}
+    {{ super() }}
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Grupy Użytkowników -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h3 class="card-title mb-0">
+                        <i class="bi bi-people-fill"></i>
+                        Grupy Użytkowników
+                    </h3>
+                    <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addGroupModal">
+                        <i class="bi bi-plus-lg"></i> Dodaj Grupę
+                    </button>
+                </div>
+                <div class="card-body table-responsive p-0">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Nazwa</th>
+                                <th>ID</th>
+                                <th>Uprawnienia</th>
+                                <th>Akcje</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for group in groups %}
+                            <tr>
+                                <td>{{ group.name }}</td>
+                                <td><code>{{ group.id }}</code></td>
+                                <td>
+                                    {% if '*' in group.permissions %}
+                                    <span class="badge bg-success">Wszystkie uprawnienia</span>
+                                    {% else %}
+                                    {% for perm in group.permissions %}
+                                    <span class="badge bg-info permission-badge">
+                                        {{ perm }}
+                                        <button type="button" class="btn-close btn-close-white btn-sm ms-1" onclick="removePermission('{{ group.id }}', '{{ perm }}')" style="font-size: 0.5rem;"></button>
+                                    </span>
+                                    {% endfor %}
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if group.id != 'admin' %}
+                                    <button type="button" class="btn btn-success btn-sm" onclick="addPermission('{{ group.id }}')">
+                                        <i class="bi bi-plus-lg"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-danger btn-sm" onclick="deleteGroup('{{ group.id }}')">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                    {% else %}
+                                    <span class="text-muted">Grupa systemowa</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Użytkownicy -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h3 class="card-title mb-0">
+                        <i class="bi bi-person-fill"></i>
+                        Użytkownicy
+                    </h3>
+                    <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addUserModal">
+                        <i class="bi bi-plus-lg"></i> Dodaj Użytkownika
+                    </button>
+                </div>
+                <div class="card-body table-responsive p-0">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Login</th>
+                                <th>ID</th>
+                                <th>Grupa</th>
+                                <th>Akcje</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user in users %}
+                            <tr>
+                                <td>{{ user.username }}</td>
+                                <td><code>{{ user.id }}</code></td>
+                                <td>
+                                    {% if user.group %}
+                                    <span class="badge bg-primary user-group-badge">
+                                        {{ user.group.name }}
+                                        {% if user.id != 'admin' %}
+                                        <button type="button" class="btn-close btn-close-white btn-sm ms-1" onclick="removeUserGroup('{{ user.id }}')" style="font-size: 0.5rem;"></button>
+                                        {% endif %}
+                                    </span>
+                                    {% else %}
+                                    <span class="badge bg-warning">Brak grupy</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if user.id != 'admin' %}
+                                    <button type="button" class="btn btn-success btn-sm" onclick="addUserGroup('{{ user.id }}')">
+                                        <i class="bi bi-plus-lg"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-danger btn-sm" onclick="deleteUser('{{ user.id }}')">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                    {% else %}
+                                    <span class="text-muted">Użytkownik systemowy</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Dodawania Grupy -->
+<div class="modal fade" id="addGroupModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Dodaj Grupę</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="addGroupForm" action="{{ url_for('routes.add_group') }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">ID Grupy</label>
+                        <input type="text" class="form-control" name="group_id" required pattern="[a-z0-9_-]+" title="Tylko małe litery, cyfry, myślniki i podkreślenia">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Nazwa Grupy</label>
+                        <input type="text" class="form-control" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Uprawnienia</label>
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" name="permissions" value="dashboard">
+                            <label class="form-check-label">Dashboard</label>
+                        </div>
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" name="permissions" value="players">
+                            <label class="form-check-label">Gracze</label>
+                        </div>
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" name="permissions" value="bot config">
+                            <label class="form-check-label">Konfiguracja Bota</label>
+                        </div>
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" name="permissions" value="management">
+                            <label class="form-check-label">Zarządzanie</label>
+                        </div>
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" name="permissions" value="dc_status">
+                            <label class="form-check-label">DC Status</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Anuluj</button>
+                    <button type="submit" class="btn btn-primary">Dodaj</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Dodawania Użytkownika -->
+<div class="modal fade" id="addUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Dodaj Użytkownika</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="addUserForm" action="{{ url_for('routes.add_user') }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Login</label>
+                        <input type="text" class="form-control" name="username" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Hasło</label>
+                        <input type="password" class="form-control" name="password" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Grupa</label>
+                        <select class="form-control" name="group_id" required>
+                            {% for group in groups %}
+                            <option value="{{ group.id }}">{{ group.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Anuluj</button>
+                    <button type="submit" class="btn btn-primary">Dodaj</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Dodawania Uprawnienia -->
+<div class="modal fade" id="addPermissionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Dodaj Uprawnienie</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="addPermissionForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Uprawnienie</label>
+                        <select class="form-control" name="permission" required>
+                            <option value="dashboard">Dashboard</option>
+                            <option value="players">Gracze</option>
+                            <option value="bot config">Konfiguracja Bota</option>
+                            <option value="management">Zarządzanie</option>
+                            <option value="dc_status">DC Status</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Anuluj</button>
+                    <button type="submit" class="btn btn-primary">Dodaj</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Dodawania Grupy Użytkownikowi -->
+<div class="modal fade" id="addUserGroupModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Dodaj Grupę Użytkownikowi</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="addUserGroupForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Grupa</label>
+                        <select class="form-control" name="group_id" required>
+                            {% for group in groups %}
+                            <option value="{{ group.id }}">{{ group.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Anuluj</button>
+                    <button type="submit" class="btn btn-primary">Dodaj</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentGroupId = null;
+let currentUserId = null;
+const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+
+// Funkcje pomocnicze
+function showConfirmDialog(message) {
+    return new Promise((resolve) => {
+        if (confirm(message)) {
+            resolve(true);
+        } else {
+            resolve(false);
+        }
+    });
+}
+
+function showToast(message, type = 'success') {
+    // Implementacja toasta
+}
+
+// Obsługa grup
+async function deleteGroup(groupId) {
+    if (await showConfirmDialog('Czy na pewno chcesz usunąć tę grupę?')) {
+        try {
+            const response = await fetch(`/management/group/${groupId}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRFToken': csrfToken
+                }
+            });
+            
+            if (response.ok) {
+                location.reload();
+            } else {
+                const data = await response.json();
+                alert(data.error || 'Wystąpił błąd podczas usuwania grupy');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Wystąpił błąd podczas usuwania grupy');
+        }
+    }
+}
+
+function addPermission(groupId) {
+    currentGroupId = groupId;
+    const modal = new bootstrap.Modal(document.getElementById('addPermissionModal'));
+    modal.show();
+}
+
+document.getElementById('addPermissionForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const permission = formData.get('permission');
+    
+    try {
+        const response = await fetch(`/management/group/${currentGroupId}/permission`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({ permission })
+        });
+        
+        if (response.ok) {
+            location.reload();
+        } else {
+            const data = await response.json();
+            alert(data.error || 'Wystąpił błąd podczas dodawania uprawnienia');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Wystąpił błąd podczas dodawania uprawnienia');
+    }
+});
+
+async function removePermission(groupId, permission) {
+    if (await showConfirmDialog('Czy na pewno chcesz usunąć to uprawnienie?')) {
+        try {
+            const response = await fetch(`/management/group/${groupId}/permission/${permission}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRFToken': csrfToken
+                }
+            });
+            
+            if (response.ok) {
+                location.reload();
+            } else {
+                const data = await response.json();
+                alert(data.error || 'Wystąpił błąd podczas usuwania uprawnienia');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Wystąpił błąd podczas usuwania uprawnienia');
+        }
+    }
+}
+
+// Obsługa użytkowników
+async function deleteUser(userId) {
+    if (await showConfirmDialog('Czy na pewno chcesz usunąć tego użytkownika?')) {
+        try {
+            const response = await fetch(`/management/user/${userId}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRFToken': csrfToken
+                }
+            });
+            
+            if (response.ok) {
+                location.reload();
+            } else {
+                const data = await response.json();
+                alert(data.error || 'Wystąpił błąd podczas usuwania użytkownika');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Wystąpił błąd podczas usuwania użytkownika');
+        }
+    }
+}
+
+function addUserGroup(userId) {
+    currentUserId = userId;
+    const modal = new bootstrap.Modal(document.getElementById('addUserGroupModal'));
+    modal.show();
+}
+
+document.getElementById('addUserGroupForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const groupId = formData.get('group_id');
+    
+    try {
+        const response = await fetch(`/management/user/${currentUserId}/group`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ group_id: groupId })
+        });
+        
+        if (response.ok) {
+            location.reload();
+        } else {
+            const data = await response.json();
+            alert(data.error || 'Wystąpił błąd podczas dodawania grupy');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Wystąpił błąd podczas dodawania grupy');
+    }
+});
+
+async function removeUserGroup(userId) {
+    if (await showConfirmDialog('Czy na pewno chcesz usunąć grupę tego użytkownika?')) {
+        try {
+            const response = await fetch(`/management/user/${userId}/group`, {
+                method: 'DELETE'
+            });
+            
+            if (response.ok) {
+                location.reload();
+            } else {
+                const data = await response.json();
+                alert(data.error || 'Wystąpił błąd podczas usuwania grupy');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Wystąpił błąd podczas usuwania grupy');
+        }
+    }
+}
+</script>
+{% endblock %} 

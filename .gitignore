@@ -1,0 +1,23 @@
+# Środowisko
+.env
+.venv/
+__pycache__/
+*.pyc
+
+# Logi
+logs/
+*.log
+
+# Konfiguracja
+config/secret_key
+config/config.json
+bot.pid
+
+# Dane
+webpanel/*.json
+!webpanel/user_groups.json
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace 

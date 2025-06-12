@@ -1,0 +1,440 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <h2 class="mb-4">
+        <i class="bi bi-speedometer2"></i> Dashboard
+    </h2>
+
+    <div class="row">
+        <!-- Status bota -->
+        <div class="col-md-6 col-xl-3 mb-4">
+            <div class="card shadow h-100">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-uppercase mb-1">Status Bota</div>
+                            <div class="h5 mb-0 font-weight-bold text-secondary" id="bot-status">
+                                <span id="status-badge">Sprawdzanie...</span>
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-robot fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                    <!-- Przyciski zarządzania botem -->
+                    <div class="row mt-3">
+                        <div class="col">
+                            <button id="start-bot" class="btn btn-success btn-sm">
+                                <i class="fas fa-play"></i> Start
+                            </button>
+                            <button id="stop-bot" class="btn btn-danger btn-sm mx-2">
+                                <i class="fas fa-stop"></i> Stop
+                            </button>
+                            <button id="restart-bot" class="btn btn-warning btn-sm">
+                                <i class="fas fa-sync"></i> Restart
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Liczba Graczy -->
+        <div class="col-md-6 col-xl-3 mb-4">
+            <div class="card shadow h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-2">Aktywni Gracze</h6>
+                            <h4 class="mb-0" id="player-count">{{ player_count }}</h4>
+                        </div>
+                        <div class="text-primary">
+                            <i class="bi bi-people-fill fs-1"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Czas Działania -->
+        <div class="col-md-6 col-xl-3 mb-4">
+            <div class="card shadow h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-2">Czas Działania</h6>
+                            <h4 class="mb-0" id="uptime">{{ uptime }}</h4>
+                        </div>
+                        <div class="text-warning">
+                            <i class="bi bi-clock-history fs-1"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Użycie Pamięci -->
+        <div class="col-md-6 col-xl-3 mb-4">
+            <div class="card shadow h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-2">Użycie Pamięci</h6>
+                            <h4 class="mb-0" id="memory-usage">{{ memory_usage }}</h4>
+                        </div>
+                        <div class="text-info">
+                            <i class="bi bi-memory fs-1"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Wykres Aktywności -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-graph-up"></i> Aktywność Graczy (24h)
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container" style="position: relative; height:300px;">
+                        <canvas id="playersChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ostatnie Logi -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-journal-text"></i> Logi Sesji
+                    </h5>
+                    <div>
+                        <div class="form-check form-switch d-inline-block me-3">
+                            <input class="form-check-input" type="checkbox" id="autoRefreshLogs" checked>
+                            <label class="form-check-label" for="autoRefreshLogs">Auto-odświeżanie</label>
+                        </div>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="clearLogs()">
+                            <i class="fas fa-trash"></i> Wyczyść
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                        <table class="table table-hover table-striped">
+                            <thead class="sticky-top bg-light">
+                                <tr>
+                                    <th style="width: 200px">Czas</th>
+                                    <th style="width: 100px">Typ</th>
+                                    <th>Wiadomość</th>
+                                </tr>
+                            </thead>
+                            <tbody id="logs-container">
+                                {% for log in logs %}
+                                <tr>
+                                    <td>{{ log.timestamp }}</td>
+                                    <td>
+                                        <span class="badge bg-{{ log.type_color }}">
+                                            {{ log.type }}
+                                        </span>
+                                    </td>
+                                    <td class="text-break">{{ log.message }}</td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="3" class="text-center">Brak logów w tej sesji</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    let sessionLogs = [];
+    let playersChart;
+
+    // Aktualizacja statusu co 15 sekund
+    function updateStatus() {
+        fetch('/api/stats')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                const statusBadge = document.getElementById('status-badge');
+                const status = data.bot_status.toUpperCase();
+                if (statusBadge) {
+                    statusBadge.textContent = status;
+                    statusBadge.className = status === 'ONLINE' ? 'text-success' : 'text-danger';
+                }
+                // Aktualizuj licznik graczy z animacją
+                const playerCountElement = document.getElementById('player-count');
+                const oldCount = playerCountElement ? (parseInt(playerCountElement.textContent) || 0) : 0;
+                const newCount = data.player_count;
+                if (playerCountElement && oldCount !== newCount) {
+                    playerCountElement.textContent = newCount;
+                    playerCountElement.classList.add('text-primary');
+                    setTimeout(() => {
+                        playerCountElement.classList.remove('text-primary');
+                    }, 1000);
+                }
+                const uptimeElement = document.getElementById('uptime');
+                if (uptimeElement) uptimeElement.textContent = data.uptime;
+                const memoryUsageElement = document.getElementById('memory-usage');
+                if (memoryUsageElement) memoryUsageElement.textContent = data.memory_usage;
+                // Aktualizuj wykres
+                if (playersChart && data.player_history) {
+                    const currentHour = new Date().getHours();
+                    const labels = Array.from({length: 24}, (_, i) => {
+                        const hour = (currentHour - 23 + i + 24) % 24;
+                        return `${hour}:00`;
+                    });
+                    playersChart.data.labels = labels;
+                    playersChart.data.datasets[0].data = data.player_history;
+                    playersChart.update('none');
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching status:', error);
+            });
+    }
+
+    // Uruchom aktualizację statusu co 15 sekund
+    updateStatus();
+    setInterval(updateStatus, 15000);
+
+    // Funkcja do obsługi akcji bota z potwierdzeniem
+    async function handleBotAction(action, confirmMessage) {
+        if (!confirmMessage || confirm(confirmMessage)) {
+            try {
+                const response = await fetch(`/api/bot/${action}`);
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                const data = await response.json();
+                
+                // Dodaj log do sesji
+                addSessionLog(data.success ? 'INFO' : 'ERROR', `${action.toUpperCase()}: ${data.message}`);
+                showToast(data.success ? 'success' : 'error', data.message);
+                
+                // Odczekaj 2 sekundy przed aktualizacją statusu
+                setTimeout(updateStatus, 2000);
+            } catch (error) {
+                console.error(`Error during ${action}:`, error);
+                addSessionLog('ERROR', `Błąd podczas ${action}: ${error.message}`);
+                showToast('error', `Błąd podczas wykonywania akcji: ${error.message}`);
+            }
+        }
+    }
+
+    // Funkcja dodająca log do sesji
+    function addSessionLog(type, message) {
+        const now = new Date();
+        const timestamp = now.toLocaleString('pl-PL');
+        const typeColor = {
+            'INFO': 'success',
+            'WARNING': 'warning',
+            'ERROR': 'danger',
+            'DEBUG': 'secondary'
+        }[type] || 'info';
+
+        sessionLogs.unshift({
+            timestamp,
+            type,
+            message,
+            typeColor
+        });
+
+        updateLogsDisplay();
+    }
+
+    // Funkcja aktualizująca wyświetlanie logów
+    function updateLogsDisplay() {
+        const container = document.getElementById('logs-container');
+        container.innerHTML = sessionLogs.length ? 
+            sessionLogs.map(log => `
+                <tr>
+                    <td>${log.timestamp}</td>
+                    <td><span class="text-${log.typeColor}">${log.type}</span></td>
+                    <td>${log.message}</td>
+                </tr>
+            `).join('') :
+            '<tr><td colspan="3" class="text-center">Brak logów w tej sesji</td></tr>';
+    }
+
+    // Funkcja do pobierania i aktualizacji logów
+    async function updateLogs() {
+        if (!document.getElementById('autoRefreshLogs').checked) return;
+        
+        try {
+            const response = await fetch('/api/logs');
+            if (!response.ok) throw new Error('Network response was not ok');
+            const logs = await response.json();
+            
+            const container = document.getElementById('logs-container');
+            if (!logs.length) {
+                container.innerHTML = '<tr><td colspan="3" class="text-center">Brak logów w tej sesji</td></tr>';
+                return;
+            }
+            
+            // Sprawdź czy ostatni log się zmienił
+            const lastLog = logs[logs.length - 1];
+            const lastDisplayedLog = sessionLogs[0];
+            
+            if (!lastDisplayedLog || 
+                lastDisplayedLog.timestamp !== lastLog.timestamp || 
+                lastDisplayedLog.message !== lastLog.message) {
+                
+                sessionLogs = logs.map(log => ({
+                    timestamp: log.timestamp,
+                    type: log.type,
+                    message: log.message,
+                    typeColor: log.type_color
+                }));
+                
+                container.innerHTML = logs.map(log => `
+                    <tr>
+                        <td>${log.timestamp}</td>
+                        <td><span class="badge bg-${log.type_color}">${log.type}</span></td>
+                        <td class="text-break">${log.message}</td>
+                    </tr>
+                `).join('');
+                
+                // Przewiń do najnowszych logów
+                const tableResponsive = container.closest('.table-responsive');
+                tableResponsive.scrollTop = tableResponsive.scrollHeight;
+            }
+        } catch (error) {
+            console.error('Error fetching logs:', error);
+        }
+    }
+
+    // Funkcja czyszcząca logi
+    async function clearLogs() {
+        if (confirm('Czy na pewno chcesz wyczyścić logi?')) {
+            try {
+                const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+                const response = await fetch('/api/logs/clear', {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': csrfToken }
+                });
+                const data = await response.json();
+                showToast(data.success ? 'success' : 'error', data.message);
+                await updateLogs();
+            } catch (error) {
+                showToast('error', 'Błąd podczas czyszczenia logów.');
+            }
+        }
+    }
+
+    // Obsługa przycisków zarządzania botem
+    document.getElementById('start-bot').addEventListener('click', () => {
+        handleBotAction('start');
+    });
+
+    document.getElementById('stop-bot').addEventListener('click', () => {
+        handleBotAction('stop', 'Czy na pewno chcesz zatrzymać bota?');
+    });
+
+    document.getElementById('restart-bot').addEventListener('click', () => {
+        handleBotAction('restart', 'Czy na pewno chcesz zrestartować bota?');
+    });
+
+    // Funkcja do wyświetlania powiadomień
+    function showToast(type, message) {
+        const toastClass = type === 'success' ? 'bg-success' : 'bg-danger';
+        const toast = `
+            <div class="toast ${toastClass} text-white" role="alert" aria-live="assertive" aria-atomic="true">
+                <div class="toast-body">
+                    ${message}
+                </div>
+            </div>
+        `;
+        
+        const toastContainer = document.createElement('div');
+        toastContainer.style.position = 'fixed';
+        toastContainer.style.top = '1rem';
+        toastContainer.style.right = '1rem';
+        toastContainer.style.zIndex = '1050';
+        toastContainer.innerHTML = toast;
+        
+        document.body.appendChild(toastContainer);
+        
+        const toastElement = new bootstrap.Toast(toastContainer.querySelector('.toast'), {
+            delay: 3000
+        });
+        toastElement.show();
+        
+        toastContainer.addEventListener('hidden.bs.toast', function () {
+            document.body.removeChild(toastContainer);
+        });
+    }
+
+    // Inicjalizacja wykresu
+    const ctx = document.getElementById('playersChart').getContext('2d');
+    const currentHour = new Date().getHours();
+    const initialLabels = Array.from({length: 24}, (_, i) => {
+        const hour = (currentHour - 23 + i + 24) % 24;
+        return `${hour}:00`;
+    });
+    
+    playersChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: initialLabels,
+            datasets: [{
+                label: 'Liczba graczy',
+                data: JSON.parse('{{ player_history|tojson }}'),
+                borderColor: 'rgb(75, 192, 192)',
+                tension: 0.1,
+                fill: true,
+                backgroundColor: 'rgba(75, 192, 192, 0.2)'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                }
+            },
+            interaction: {
+                mode: 'nearest',
+                axis: 'x',
+                intersect: false
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
+</script>
+{% endblock %} 
