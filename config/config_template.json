@@ -1,0 +1,31 @@
+{
+    "_comment_DISCORD_CHANNEL_ID": "ID kanału Discord, na którym bot będzie ogłaszał status serwera (np. restart).",
+    "DISCORD_CHANNEL_ID": "ID_KANALU_DISCORD",
+  
+    "_comment_DISCORD_PRIVATE_CHANNEL_ID": "ID kanału Discord, na który będą wysyłane logi administracyjne i błędy krytyczne.",
+    "DISCORD_PRIVATE_CHANNEL_ID": "ID_KANALU_PRYWATNEGO",
+  
+    "_comment_DISCORD_LOG_CHANNEL_ID": "ID kanału Discord do logowania akcji (np. wysłanie wiadomości na czat).",
+    "DISCORD_LOG_CHANNEL_ID": "ID_KANALU_LOGOW",
+  
+    "_comment_DISCORD_ADMIN_ROLE_ID": "ID roli na Discordzie, która ma pełne uprawnienia do bota.",
+    "DISCORD_ADMIN_ROLE_ID": "ID_ROLI_ADMINA",
+  
+    "_comment_DISCORD_MOD_ROLE_ID": "ID roli na Discordzie, która ma uprawnienia moderatorskie do bota.",
+    "DISCORD_MOD_ROLE_ID": "ID_ROLI_MODERATORA",
+  
+    "_comment_DISCORD_STATUS_CHANNEL_ID": "ID kanału, na którym będzie wyświetlany stały status serwera (embed).",
+    "DISCORD_STATUS_CHANNEL_ID": "ID_KANALU_STATUSU",
+  
+    "_comment_GAME_SERVER_HOST": "Adres IP serwera gry MotorTown.",
+    "GAME_SERVER_HOST": "127.0.0.1",
+  
+    "_comment_GAME_SERVER_PORT": "Port API serwera gry MotorTown (domyślnie 2307).",
+    "GAME_SERVER_PORT": 2307,
+  
+    "_comment_LOG_LEVEL": "Poziom logowania dla aplikacji. Dostępne opcje: DEBUG, INFO, WARNING, ERROR, CRITICAL.",
+    "LOG_LEVEL": "INFO",
+  
+    "_comment_DEBUG": "Tryb debugowania dla panelu webowego (Flask). Ustaw na 'True' lub 'False'.",
+    "DEBUG": "False"
+  } 
