@@ -204,6 +204,13 @@ pip install -r requirements.txt
 }
 ```
 
+> **Dlaczego DISCORD_TOKEN i GAME_SERVER_RCON_PASSWORD są nadal obecne w config.json?**
+>
+> Pola `DISCORD_TOKEN` oraz `GAME_SERVER_RCON_PASSWORD` muszą istnieć w pliku `config.json`, ponieważ:
+> - Panel administracyjny umożliwia edycję i podgląd całej konfiguracji (w tym tych pól), ale wartości tych pól powinny pozostać puste w repozytorium i na produkcji.
+> - Kod bota i panelu najpierw próbuje pobrać te wartości z pliku `.env` (zalecane i bezpieczne), a dopiero w drugiej kolejności z `config.json` (np. na środowisku deweloperskim lub testowym).
+> - Dzięki temu zachowana jest kompatybilność panelu i formularzy konfiguracyjnych, a jednocześnie nie przechowuje się wrażliwych danych w repozytorium.
+
 5. Utwórz plik `.env` w katalogu głównym projektu i dodaj do niego:
 ```env
 DISCORD_TOKEN=twoj_token_bota
