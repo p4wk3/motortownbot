@@ -229,22 +229,5 @@ def main():
         print(f"Błąd podczas uruchamiania panelu: {str(e)}")
         sys.exit(1)
 
-def setup_admin_account():
-    """Konfiguruje konto administratora, jeśli nie istnieje"""
-    load_dotenv()
-    
-    if not os.getenv('ADMIN_USERNAME') or not os.getenv('ADMIN_PASSWORD'):
-        print("Konfiguracja konta administratora:")
-        username = input("Podaj nazwę użytkownika: ")
-        password = input("Podaj hasło: ")
-        
-        with open('.env', 'a') as f:
-            f.write(f"\nADMIN_USERNAME={username}\n")
-            f.write(f"ADMIN_PASSWORD={generate_password_hash(password)}\n")
-            f.write(f"FLASK_SECRET_KEY={os.urandom(24).hex()}\n")
-        
-        print("Konto administratora zostało skonfigurowane!")
-
 if __name__ == '__main__':
-    setup_admin_account()
     main() 

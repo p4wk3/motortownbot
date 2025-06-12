@@ -9,21 +9,10 @@ from datetime import datetime
 import aiohttp
 import asyncio
 import json
+from config import CONFIG, get_config
 
 login_manager = LoginManager()
 csrf = CSRFProtect()
-
-def load_config():
-    """Ładuje i waliduje konfigurację"""
-    config_path = os.path.join('config', 'config.json')
-    if not os.path.exists(config_path):
-        return {}
-    try:
-        with open(config_path, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception as e:
-        print(f"Błąd wczytywania konfiguracji: {e}")
-        return {}
 
 def load_or_create_secret_key():
     """Wczytuje lub tworzy nowy klucz sekretny"""
@@ -114,8 +103,7 @@ def create_app():
 
 async def send_discord_error(error_message, error_type="ERROR"):
     """Wysyła błąd na kanał prywatny Discorda"""
-    config = load_config()
-    webhook_url = f"https://discord.com/api/webhooks/{config.get('DISCORD_PRIVATE_CHANNEL_ID')}"
+    webhook_url = f"https://discord.com/api/webhooks/{CONFIG.get('DISCORD_PRIVATE_CHANNEL_ID')}"
     
     embed = {
         "title": f"❌ {error_type}",

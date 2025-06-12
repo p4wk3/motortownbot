@@ -1,7 +1,7 @@
 import os
+from dotenv import load_dotenv
 import discord
 from discord.ext import commands
-from dotenv import load_dotenv
 import aiohttp
 from urllib.parse import quote_plus
 import logging
@@ -13,6 +13,7 @@ from discord.abc import Messageable
 import sys
 import asyncio
 from datetime import datetime
+from config import CONFIG, get_config
 
 # Konfiguracja logowania z rotacją
 log_handler = logging.handlers.RotatingFileHandler(
@@ -46,23 +47,25 @@ def load_config() -> Dict[str, Any]:
     config_path = os.path.join('config', 'config.json')
     if not os.path.exists(config_path):
         raise FileNotFoundError(f"Plik konfiguracyjny nie istnieje: {config_path}")
-        
+    
     try:
         with open(config_path, 'r', encoding='utf-8') as f:
             config = json.load(f)
-            
-        # Walidacja wymaganych pól
-        required_fields = [
-            'DISCORD_TOKEN',
-            'GAME_SERVER_HOST',
-            'GAME_SERVER_PORT',
-            'GAME_SERVER_RCON_PASSWORD'
-        ]
         
+        # Walidacja wymaganych pól (token i hasło mogą być w .env)
+        load_dotenv()
+        required_fields = [
+            'GAME_SERVER_HOST',
+            'GAME_SERVER_PORT'
+        ]
         missing_fields = [field for field in required_fields if not config.get(field)]
         if missing_fields:
             raise ValueError(f"Brakujące wymagane pola w konfiguracji: {', '.join(missing_fields)}")
-            
+        # Token i hasło: sprawdź czy są w config.json LUB w .env
+        if not (config.get('DISCORD_TOKEN') or os.getenv('DISCORD_TOKEN')):
+            raise ValueError("Brakujący DISCORD_TOKEN w config.json lub .env")
+        if not (config.get('GAME_SERVER_RCON_PASSWORD') or os.getenv('GAME_SERVER_RCON_PASSWORD')):
+            raise ValueError("Brakujący GAME_SERVER_RCON_PASSWORD w config.json lub .env")
         # Konwersja ID na int
         id_fields = [
             'DISCORD_CHANNEL_ID',
@@ -71,7 +74,6 @@ def load_config() -> Dict[str, Any]:
             'DISCORD_ADMIN_ROLE_ID',
             'DISCORD_MOD_ROLE_ID'
         ]
-        
         for field in id_fields:
             if field in config and isinstance(config[field], str):
                 try:
@@ -79,15 +81,12 @@ def load_config() -> Dict[str, Any]:
                 except ValueError:
                     logger.warning(f"Nieprawidłowa wartość dla {field}: {config[field]}")
                     config[field] = 0
-                    
         # Konwersja portu na int
         try:
             config['GAME_SERVER_PORT'] = int(config['GAME_SERVER_PORT'])
         except ValueError:
             raise ValueError(f"Nieprawidłowy port serwera: {config['GAME_SERVER_PORT']}")
-            
         return config
-        
     except json.JSONDecodeError as e:
         raise ValueError(f"Błąd parsowania pliku konfiguracyjnego: {str(e)}")
     except Exception as e:
@@ -101,9 +100,10 @@ except Exception as e:
     logger.critical(f"Błąd wczytywania konfiguracji: {str(e)}")
     sys.exit(1)
 
-# Ładuj zmienne środowiskowe
-load_dotenv()
-TOKEN = os.getenv('DISCORD_TOKEN') or config.get('DISCORD_TOKEN', '')
+# Konfiguracja została przeniesiona do config.py
+
+# Ładuj zmienne środowiskowe - teraz obsługiwane przez config.py
+TOKEN = CONFIG.get('DISCORD_TOKEN', '')
 PREFIX = '!'
 
 # Konfiguracja intencji
@@ -210,10 +210,9 @@ class MotorTownBot(commands.Bot):
         """Aktualizuje liczbę graczy i historię"""
         while not self.is_closed():
             try:
-                response = await self.api_request('GET', '/players')
+                response = await self.api_request('GET', '/player/count')
                 if response['succeeded']:
-                    players = response['data'].get('players', [])
-                    current_count = len(players)
+                    current_count = response['data'].get('num_players', 0)
                     
                     # Aktualizuj historię
                     current_hour = datetime.now().hour
@@ -348,14 +347,46 @@ class MotorTownBot(commands.Bot):
             print(f"❌ Błąd ładowania cogów: {e}")
 
     async def on_ready(self):
+        logger.info(f"--- BOT IS READY ---")
         if self.user:
-            print(f'✅ Zalogowano jako {self.user.name}')
-            logging.info(f'Zalogowano jako {self.user.name}')
-        print(f'🔗 Połączono z API: {self.base_url}')
-        logging.info(f'Połączono z API: {self.base_url}')
+            logger.info(f'Logged in as {self.user.name}')
+            logger.info(f'User ID: {self.user.id}')
+        else:
+            logger.warning("Bot is ready but self.user is not available.")
+        logger.info(f'Discord.py Version: {discord.__version__}')
+        logger.info(f'Public Channel: {self.public_channel}')
+        logger.info(f'Log Channel: {self.log_channel}')
+        logger.info(f'Admin Role: {self.admin_role}')
+        logger.info("--------------------")
+        
+        # Start background tasks
+        self.update_player_count_task = self.loop.create_task(self.update_player_count())
+        
+        logger.info("Cogs loaded:")
+        for cog in self.cogs:
+            logger.info(f"- {cog}")
+
+        logger.info("Attempting to sync commands...")
+        try:
+            synced = await self.tree.sync()
+            logger.info(f"Synced {len(synced)} slash commands.")
+        except Exception as e:
+            logger.error(f"Failed to sync slash commands: {e}")
+            
+        logger.info("Bot is fully operational.")
 
 # Tworzenie i uruchamianie bota
-bot = MotorTownBot(config)
+bot = MotorTownBot(CONFIG)
 
 if __name__ == '__main__':
-    bot.run(TOKEN)
+    # Upewnij się, że token jest dostępny
+    if not TOKEN:
+        logger.critical("CRITICAL: DISCORD_TOKEN is not set. Bot cannot start.")
+    else:
+        logger.info(f"Starting bot with token ending in ...{TOKEN[-4:]}")
+        try:
+            bot.run(TOKEN)
+        except discord.errors.LoginFailure:
+            logger.critical("Login failed. The provided Discord token is invalid.")
+        except Exception as e:
+            logger.critical(f"An error occurred while running the bot: {e}")

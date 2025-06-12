@@ -4,5 +4,12 @@
         "permissions": [
             "*"
         ]
+    },
+    "mod": {
+        "name": "Moderator",
+        "permissions": [
+            "dashboard",
+            "players"
+        ]
     }
 }

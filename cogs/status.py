@@ -60,6 +60,10 @@ class Status(commands.Cog):
         except Exception as e:
             logger.error(f"Błąd sprawdzania statusu: {str(e)}")
 
+    @check_status.before_loop
+    async def before_check_status(self):
+        await self.bot.wait_until_ready()
+
     async def _check_new_players(self):
         """Sprawdza i śledzi nowych graczy"""
         try:
@@ -111,10 +115,16 @@ class Status(commands.Cog):
     @tasks.loop(minutes=1)
     async def update_status(self):
         """Aktualizuje status bota co minutę"""
+        logger.info("Status Update Task: Running...")
         try:
-            await self._update_presence()
+            status_text = await self._update_presence()
+            logger.info(f"Status Update Task: Presence updated successfully. Status: {status_text}")
         except Exception as e:
-            logger.error(f"Status update error: {str(e)}")
+            logger.error(f"Status update error: {str(e)}", exc_info=True)
+
+    @update_status.before_loop
+    async def before_update_status(self):
+        await self.bot.wait_until_ready()
 
     async def _update_presence(self):
         """Aktualizuje obecność bota i zwraca status serwera"""

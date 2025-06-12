@@ -23,7 +23,8 @@ from run_admin import start_bot as admin_start_bot, stop_bot as admin_stop_bot
 from .auth import admin_required
 from .playerlist import PlayerTracker
 import threading
-from . import report_critical_error, load_config
+from . import report_critical_error
+from config import CONFIG
 
 bp = Blueprint('routes', __name__)
 
@@ -47,7 +48,6 @@ def management_required(f):
 class ConfigForm(FlaskForm):
     """Formularz konfiguracji"""
     # Discord
-    DISCORD_TOKEN = PasswordField('Token Bota')
     DISCORD_CHANNEL_ID = StringField('ID Kanału Głównego')
     DISCORD_PRIVATE_CHANNEL_ID = StringField('ID Kanału Prywatnego')
     DISCORD_LOG_CHANNEL_ID = StringField('ID Kanału Logów')
@@ -58,7 +58,6 @@ class ConfigForm(FlaskForm):
     # Game Server
     GAME_SERVER_HOST = StringField('Host Serwera')
     GAME_SERVER_PORT = StringField('Port Serwera')
-    GAME_SERVER_RCON_PASSWORD = PasswordField('Hasło RCON')
     
     # Debug
     LOG_LEVEL = SelectField('Poziom Logowania', choices=[
@@ -137,10 +136,9 @@ def get_uptime():
 
 def get_server_url():
     """Tworzy URL do API serwera gry"""
-    config = load_config()
-    host = config.get('GAME_SERVER_HOST', '')
-    port = config.get('GAME_SERVER_PORT', '')
-    password = quote_plus(config.get('GAME_SERVER_RCON_PASSWORD', ''))
+    host = CONFIG.get('GAME_SERVER_HOST', '')
+    port = CONFIG.get('GAME_SERVER_PORT', '')
+    password = quote_plus(CONFIG.get('GAME_SERVER_RCON_PASSWORD', ''))
     return f"http://{host}:{port}", password
 
 def get_player_data():
@@ -301,10 +299,9 @@ def read_bot_logs(log_path='bot.log', max_lines=500):
 
 def fetch_and_update_players():
     try:
-        config = load_config()
-        host = config.get('GAME_SERVER_HOST', '')
-        port = config.get('GAME_SERVER_PORT', '')
-        password = quote_plus(config.get('GAME_SERVER_RCON_PASSWORD', ''))
+        host = CONFIG.get('GAME_SERVER_HOST', '')
+        port = CONFIG.get('GAME_SERVER_PORT', '')
+        password = quote_plus(CONFIG.get('GAME_SERVER_RCON_PASSWORD', ''))
         base_url = f"http://{host}:{port}"
         # Pobierz graczy
         list_url = f"{base_url}/player/list?password={password}"
@@ -376,26 +373,26 @@ def config():
     form = ConfigForm()
     
     if form.validate_on_submit():
-        # Zbierz dane z formularza
-        config_data = {}
+        # Zbierz dane z formularza i połącz z istniejącą konfiguracją
+        config_data = CONFIG.copy() # Użyj kopii aktualnej konfiguracji
         for field in form:
-            if field.name != 'csrf_token' and field.data:
+            if field.name not in ['csrf_token', 'DISCORD_TOKEN', 'GAME_SERVER_RCON_PASSWORD'] and field.data:
                 config_data[field.name] = field.data
         
         try:
+            # Zapisz tylko te dane, które nie są sekretami
             save_config(config_data)
-            flash('Konfiguracja została zapisana', 'success')
+            flash('Konfiguracja została zapisana. Zrestartuj aplikację, aby załadować zmiany.', 'success')
             return redirect(url_for('routes.config'))
         except Exception as e:
             flash(f'Błąd podczas zapisywania konfiguracji: {str(e)}', 'error')
     
-    # Wczytaj aktualną konfigurację
-    config = load_config()
+    # Wczytaj aktualną konfigurację z centralnego źródła
     discord_cache = load_discord_cache()
     
     return render_template('config.html',
                          form=form,
-                         config=config,
+                         config=CONFIG, # Zawsze przekazuj aktualną, załadowaną konfigurację
                          text_channels=discord_cache.get('text_channels', []),
                          roles=discord_cache.get('roles', []))
 
@@ -734,7 +731,6 @@ def dc_status():
     embed_path = os.path.join(os.path.dirname(__file__), 'dc_status.json')
     
     # Pobierz dane o graczach
-    config = load_config()
     base_url, password = get_server_url()
     count = get_player_count()
     players = player_tracker.get_all_players()
