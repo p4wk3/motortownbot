@@ -210,8 +210,8 @@ def main():
     
     # Parsowanie argumentów
     parser = argparse.ArgumentParser(description='Panel administracyjny bota')
-    parser.add_argument('--host', default='127.0.0.1', help='Host na którym uruchomić panel (domyślnie: 127.0.0.1)')
-    parser.add_argument('--port', type=int, default=5000, help='Port na którym uruchomić panel (domyślnie: 5000)')
+    parser.add_argument('--host', default=os.getenv('WEBPANEL_HOST', '127.0.0.1'), help='Host na którym uruchomić panel')
+    parser.add_argument('--port', type=int, default=os.getenv('WEBPANEL_PORT', 5000), help='Port na którym uruchomić panel')
     parser.add_argument('--debug', action='store_true', help='Uruchom w trybie debug')
     
     args = parser.parse_args()
