@@ -25,6 +25,7 @@ from .playerlist import PlayerTracker
 import threading
 from . import report_critical_error
 from config import CONFIG
+from . import limiter
 
 bp = Blueprint('routes', __name__)
 
@@ -87,6 +88,33 @@ def load_config():
         return {}
 
 def save_config(config):
+    """Zapisuje i waliduje konfigurację"""
+    required_fields = [
+        'GAME_SERVER_HOST',
+        'GAME_SERVER_PORT',
+        'DISCORD_CHANNEL_ID',
+        'DISCORD_STATUS_CHANNEL_ID'
+    ]
+    
+    # Sprawdź wymagane pola
+    missing_fields = [field for field in required_fields if not config.get(field)]
+    if missing_fields:
+        raise ValueError(f"Brakujące wymagane pola konfiguracji: {', '.join(missing_fields)}")
+    
+    # Walidacja portów
+    try:
+        port = int(config['GAME_SERVER_PORT'])
+        if port < 1 or port > 65535:
+            raise ValueError("Port serwera gry musi być między 1 a 65535")
+    except ValueError as e:
+        raise ValueError(f"Nieprawidłowy port serwera gry: {str(e)}")
+    
+    # Walidacja ID kanałów Discord (powinny być numeryczne)
+    discord_id_fields = [f for f in config.keys() if f.endswith('_ID')]
+    for field in discord_id_fields:
+        if config[field] and not str(config[field]).isdigit():
+            raise ValueError(f"Pole {field} musi być numerycznym ID")
+    
     config_path = os.path.join('config', 'config.json')
     with open(config_path, 'w', encoding='utf-8') as f:
         json.dump(config, f, indent=2, ensure_ascii=False)
@@ -331,15 +359,27 @@ fetch_and_update_players()
 
 @bp.route('/api/stats')
 @login_required
+@limiter.limit("300 per hour")  # Zwiększony limit do 300 zapytań na godzinę
 def get_stats():
     """Endpoint API zwracający aktualne statystyki"""
-    return jsonify({
-        'bot_status': get_bot_status(),
-        'memory_usage': get_memory_usage(),
-        'uptime': get_uptime(),
-        'player_count': get_player_count(),
-        'player_history': get_player_history()
-    })
+    try:
+        return jsonify({
+            'bot_status': get_bot_status(),
+            'memory_usage': get_memory_usage(),
+            'uptime': get_uptime(),
+            'player_count': get_player_count(),
+            'player_history': get_player_history()
+        })
+    except Exception as e:
+        current_app.logger.error(f"Błąd podczas pobierania statystyk: {str(e)}")
+        return jsonify({
+            'error': 'Wystąpił błąd podczas pobierania statystyk',
+            'bot_status': 'unknown',
+            'memory_usage': '0 MB',
+            'uptime': '0d 0h 0m',
+            'player_count': 0,
+            'player_history': [0] * 24
+        }), 500
 
 @bp.route('/')
 @login_required
@@ -398,6 +438,7 @@ def config():
 
 @bp.route('/api/bot/start')
 @login_required
+@limiter.limit("5 per minute")
 def api_bot_start():
     """Endpoint API do uruchamiania bota"""
     success, message = admin_start_bot()
@@ -406,6 +447,7 @@ def api_bot_start():
 
 @bp.route('/api/bot/stop')
 @login_required
+@limiter.limit("5 per minute")
 def api_bot_stop():
     """Endpoint API do zatrzymywania bota"""
     success, message = admin_stop_bot()
@@ -414,6 +456,7 @@ def api_bot_stop():
 
 @bp.route('/api/bot/restart')
 @login_required
+@limiter.limit("5 per minute")
 def api_bot_restart():
     """Endpoint API do restartowania bota"""
     success, message = admin_stop_bot()

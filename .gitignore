@@ -21,3 +21,7 @@ webpanel/*.json
 .vscode/
 .idea/
 *.code-workspace 
+
+# Cursor
+retrospective.md
+todo.md

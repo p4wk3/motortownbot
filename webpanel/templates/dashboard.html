@@ -169,7 +169,7 @@
     let sessionLogs = [];
     let playersChart;
 
-    // Aktualizacja statusu co 15 sekund
+    // Aktualizacja statusu co 30 sekund
     function updateStatus() {
         fetch('/api/stats')
             .then(response => {
@@ -217,9 +217,9 @@
             });
     }
 
-    // Uruchom aktualizację statusu co 15 sekund
+    // Uruchom aktualizację statusu co 30 sekund
     updateStatus();
-    setInterval(updateStatus, 15000);
+    setInterval(updateStatus, 30000);
 
     // Funkcja do obsługi akcji bota z potwierdzeniem
     async function handleBotAction(action, confirmMessage) {

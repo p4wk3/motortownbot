@@ -1,6 +1,8 @@
 from flask import Flask
 from flask_login import LoginManager
 from flask_wtf.csrf import CSRFProtect
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 import os
 import logging
 from logging.handlers import RotatingFileHandler
@@ -13,6 +15,10 @@ from config import CONFIG, get_config
 
 login_manager = LoginManager()
 csrf = CSRFProtect()
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"]
+)
 
 def load_or_create_secret_key():
     """Wczytuje lub tworzy nowy klucz sekretny"""
@@ -34,6 +40,9 @@ def load_or_create_secret_key():
 
 def create_app():
     app = Flask(__name__)
+    
+    # Inicjalizacja rate limitera
+    limiter.init_app(app)
     
     # Ustaw stały klucz sekretny
     app.config['SECRET_KEY'] = load_or_create_secret_key()
